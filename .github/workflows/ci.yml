@@ -80,37 +80,20 @@ jobs:
         run: |
           set -euo pipefail
           docker run -d --name sanity -p 8000:8000 "$IMAGE"
+          trap 'docker logs sanity; docker rm -f sanity' EXIT
+          curl -sf --retry 30 --retry-delay 1 --retry-connrefused --retry-all-errors\
+            http://localhost:8000/health
 
-          echo "Waiting for /health ..."
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:8000/health >/dev/null; then
-              echo "healthy after ${i}s"; break
-            fi
-            if [ "$i" -eq 30 ]; then
-              echo "service did not become healthy"; docker logs sanity; exit 1
-            fi
-            sleep 1
-          done
+          assert() {  # $1=expected code  $2=payload
+            code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+              http://localhost:8000/measure -H 'Content-Type: application/json' -d "$2")
+            [ "$code" = "$1" ] || { echo "expected $1, got $code"; exit 1; }
+          }
+          assert 202 '{"url":"https://example.com","frequency":1,"duration":2}'
+          assert 422 '{"url":"not-a-url","frequency":-1}'
 
-          echo "Assert valid /measure returns 202 ..."
-          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
-            http://localhost:8000/measure -H 'Content-Type: application/json' \
-            -d '{"url":"https://example.com","frequency":1,"duration":2}')
-          test "$code" = "202" || { echo "expected 202, got $code"; exit 1; }
-
-          echo "Assert malformed /measure returns 422 ..."
-          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
-            http://localhost:8000/measure -H 'Content-Type: application/json' \
-            -d '{"url":"not-a-url","frequency":-1}')
-          test "$code" = "422" || { echo "expected 422, got $code"; exit 1; }
-
-          echo "Assert a sample was emitted ..."
           sleep 3
-          docker logs sanity 2>&1 | grep -q 'latency_ms' \
-            || { echo "no sample emitted"; docker logs sanity; exit 1; }
-
-          echo "Sanity checks passed."
-          docker rm -f sanity
+          docker logs sanity 2>&1 | grep -q latency_ms || { echo "no sample emitted"; exit 1; }
 
   push:
     needs: [build, sanity]
