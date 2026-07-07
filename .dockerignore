@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+tests/
+requirements-dev.txt
+pytest.ini
+
+.git/
+.gitignore
+.dockerignore
+Dockerfile
+
+samples.txt
+*.pdf
+CLAUDE*.md
