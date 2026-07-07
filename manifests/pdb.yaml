@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: latency-service
+  labels:
+    app.kubernetes.io/name: latency-service
+    app.kubernetes.io/part-of: codsec-assignment
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: latency-service

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: latency-service
+  labels:
+    app.kubernetes.io/name: latency-service
+    app.kubernetes.io/part-of: codsec-assignment
+data:
+  REQUEST_TIMEOUT: "10.0"
+  DEFAULT_DURATION: "600"
+  FOLLOW_REDIRECTS: "true"
