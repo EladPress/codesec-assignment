@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY_IMAGE: eladpress/codsec-assignment
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Lint (ruff)
+        run: ruff check app tests
+      - name: Run tests
+        run: pytest -q
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.image-tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: image-tag
+        run: |
+          branch="${GITHUB_REF_NAME//\//-}"
+          echo "tag=${branch}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image to tarball
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: ${{ env.REGISTRY_IMAGE }}:${{ steps.image-tag.outputs.tag }}
+          outputs: type=docker,dest=/tmp/image.tar
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ github.run_id }}
+          path: /tmp/image.tar
+          retention-days: 1
+
+  sanity:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: image-${{ github.run_id }}
+          path: /tmp
+
+      - name: Load image
+        run: docker load -i /tmp/image.tar
+
+      - name: Sanity check the built image
+        env:
+          IMAGE: ${{ env.REGISTRY_IMAGE }}:${{ needs.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          docker run -d --name sanity -p 8000:8000 "$IMAGE"
+
+          echo "Waiting for /health ..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health >/dev/null; then
+              echo "healthy after ${i}s"; break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "service did not become healthy"; docker logs sanity; exit 1
+            fi
+            sleep 1
+          done
+
+          echo "Assert valid /measure returns 202 ..."
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            http://localhost:8000/measure -H 'Content-Type: application/json' \
+            -d '{"url":"https://example.com","frequency":1,"duration":2}')
+          test "$code" = "202" || { echo "expected 202, got $code"; exit 1; }
+
+          echo "Assert malformed /measure returns 422 ..."
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            http://localhost:8000/measure -H 'Content-Type: application/json' \
+            -d '{"url":"not-a-url","frequency":-1}')
+          test "$code" = "422" || { echo "expected 422, got $code"; exit 1; }
+
+          echo "Assert a sample was emitted ..."
+          sleep 3
+          docker logs sanity 2>&1 | grep -q 'latency_ms' \
+            || { echo "no sample emitted"; docker logs sanity; exit 1; }
+
+          echo "Sanity checks passed."
+          docker rm -f sanity
+
+  push:
+    needs: [build, sanity]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: image-${{ github.run_id }}
+          path: /tmp
+
+      - name: Load image
+        run: docker load -i /tmp/image.tar
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push image
+        run: docker push "${REGISTRY_IMAGE}:${{ needs.build.outputs.tag }}"
