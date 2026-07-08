@@ -1,3 +1,5 @@
+# A diagram describing the flow of the program
+
 ```mermaid
 flowchart TD
     A[Client] 
@@ -6,13 +8,11 @@ flowchart TD
         B --> | valid | E & G
             E["HTTP 202 (Accepted)"]
             G["run_job"] --> H
-            H["measure_once(url)"] --> I
-                I["emit(sample) \n (prints results of measurement to stdout)"] --> J
-                    J["sleep(frequency)"] --> K
-                        K[while: duration has not passed]
-                        K --> | True | H
-                        K --> | False | L
-                            L["Job complete"]
+            H[while: duration has not passed] --> | False | L["Job complete"]
+            H --> | True | I
+            I["measure_once(url)"] --> J
+                J["emit(sample) \n (prints results of measurement to stdout)"] --> K
+                    K["sleep(frequency)"] --> H
 
         B --> | invalid | F["HTTP 422"]
 
