@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: latency-service
+  labels:
+    app.kubernetes.io/name: latency-service
+    app.kubernetes.io/part-of: codsec-assignment
+spec:
+  # ingressClassName and host are environment-specific — adjust per cluster.
+  ingressClassName: nginx
+  rules:
+    - host: latency-service.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: latency-service
+                port:
+                  name: http
