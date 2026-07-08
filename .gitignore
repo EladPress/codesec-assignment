@@ -2,8 +2,14 @@
 CLAUDE*.md
 TODO
 
-# Python
 .venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
