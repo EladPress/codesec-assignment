@@ -14,7 +14,8 @@ from .measure import measure_once
 
 async def run_job(url: str, frequency: float, duration: float) -> None:
     """Measure ``url`` once every ``frequency`` seconds for ``duration`` seconds."""
-    deadline = time.monotonic() + duration
+    start = time.monotonic()
+    deadline = start + duration
     print(
         f"[scheduler] starting job url={url} frequency={frequency}s "
         f"duration={duration}s",
@@ -25,10 +26,12 @@ async def run_job(url: str, frequency: float, duration: float) -> None:
     while time.monotonic() < deadline:
         tick_start = time.monotonic()
         sample = await measure_once(url)
+        sample["elapsed_seconds"] = round(tick_start - start, 2)
+        sample["remaining_s"] = round(max(0.0, deadline - tick_start), 2)
         emit(sample)
         # Subtract the request's own duration so samples land on a steady
         # wall-clock cadence rather than drifting as latency grows.
-        elapsed = time.monotonic() - tick_start
-        await asyncio.sleep(max(0.0, frequency - elapsed))
+        tick_duration = time.monotonic() - tick_start
+        await asyncio.sleep(max(0.0, frequency - tick_duration))
 
     print(f"[scheduler] job complete url={url}", file=sys.stderr, flush=True)
