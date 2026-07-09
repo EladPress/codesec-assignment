@@ -95,8 +95,37 @@ jobs:
           sleep 3
           docker logs sanity 2>&1 | grep -q latency_ms || { echo "no sample emitted"; exit 1; }
 
+  trivy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: image-${{ github.run_id }}
+          path: /tmp
+
+      - name: Load image
+        run: docker load -i /tmp/image.tar
+
+      - name: Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY_IMAGE }}:${{ needs.build.outputs.tag }}
+          severity: CRITICAL,HIGH
+          format: table
+          output: trivy-report.txt
+          exit-code: "0" ##No vulnerabilities will fail the build, as this is outside the scope of this assignment
+
+      - name: Upload Trivy scan result
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report-${{ github.run_id }}
+          path: trivy-report.txt
+          retention-days: 7
+
   push:
-    needs: [build, sanity]
+    needs: [build, sanity, trivy]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
