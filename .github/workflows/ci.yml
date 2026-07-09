@@ -92,8 +92,15 @@ jobs:
           assert 202 '{"url":"https://example.com","frequency":1,"duration":2}'
           assert 422 '{"url":"not-a-url","frequency":-1}'
 
-          sleep 3
-          docker logs sanity 2>&1 | grep -q latency_ms || { echo "no sample emitted"; exit 1; }
+          # The sample is emitted asynchronously; poll for it (a fixed sleep
+          # can miss it on a loaded runner).
+          for _ in $(seq 30); do
+            if docker logs sanity 2>&1 | grep -q latency_ms; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "no sample emitted within 30s"; exit 1
 
   trivy:
     needs: build
