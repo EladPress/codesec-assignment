@@ -19,3 +19,4 @@ NOTE: No vulnerability will fail this build because removing vulnerabilities is 
 ## Push Image Job
 This job logs in to Docker hub and then pushes the built image. The pushed image will have the following name+tag:
 docker.io/eladpress/codsec-assignment:{BRANCH_NAME-BUILD_NUMBER}
+An additional tag being pushed with every build is: {latest-BRANCH_NAME} for development purposes.
