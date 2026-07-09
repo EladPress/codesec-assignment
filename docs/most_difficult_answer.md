@@ -1,0 +1,2 @@
+# The Most Difficult Part of the Assignment To Me
+The most difficult part of this assignment for me was probably the development of the actual app. I have developed using Python before, but this project presented a lot of new concepts to me, such as FastAPI and Pydantic 
