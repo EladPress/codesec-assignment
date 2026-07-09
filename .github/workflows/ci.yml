@@ -152,4 +152,9 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Push image
-        run: docker push "${REGISTRY_IMAGE}:${{ needs.build.outputs.tag }}"
+        run: |
+          latest="latest-${GITHUB_REF_NAME//\//-}"
+          docker tag "${REGISTRY_IMAGE}:${{ needs.build.outputs.tag }}" \
+            "${REGISTRY_IMAGE}:${latest}"
+          docker push "${REGISTRY_IMAGE}:${{ needs.build.outputs.tag }}"
+          docker push "${REGISTRY_IMAGE}:${latest}"
